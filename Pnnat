@@ -1,0 +1,102 @@
+/**
+ * @file processoseletivoIoT.ino
+ * @brief Sistema de Monitoramento de Temperatura e Umidade com ESP32
+ * @author Holiver Nicolas
+ * @date 2026
+ */
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+// --- Mapeamento de Pinos ---
+#define DHTPIN 15          // Pino de dados do sensor DHT22
+#define LED_PIN 2          // Pino do LED de Alerta (Vermelho)
+#define BUZZER_PIN 4        // Pino do Buzzer
+
+// --- Definições do Sensor e Display ---
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Endereço I2C padrão: 0x27
+
+// --- Limites de Alerta ---
+const float MAX_TEMP = 35.0; // Temperatura máxima permitida (°C)
+const float MAX_UMID = 70.0; // Umidade máxima permitida (%)
+
+// --- Variáveis de Controle de Tempo (Milisegundos) ---
+unsigned long tempoAnteriorLeitura = 0;
+const long intervaloLeitura = 2000; // Intervalo de 2 segundos para ler o sensor
+
+void setup() {
+  // Inicialização da Comunicação Serial (Útil para debug)
+  Serial.begin(115200);
+  
+  // Configuração dos Pinos de Saída
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  
+  // Garante que os atuadores iniciem desligados
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // Inicializa o Sensor DHT22
+  dht.begin();
+
+  // Inicializa o Display LCD I2C
+  lcd.init();
+  lcd.backlight();
+  
+  // Tela de Inicialização
+  lcd.setCursor(0, 0);
+  lcd.print("  Inicializando ");
+  lcd.setCursor(0, 1);
+  lcd.print("   Sistema...   ");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  unsigned long tempoAtual = millis();
+
+  // Controle de tempo não-bloqueante (evita o uso de delay no loop principal)
+  if (tempoAtual - tempoAnteriorLeitura >= intervaloLeitura) {
+    tempoAnteriorLeitura = tempoAtual;
+
+    // Leitura dos dados do sensor
+    float umidade = dht.readHumidity();
+    float temperatura = dht.readTemperature();
+
+    // Validação da leitura do sensor
+    if (isnan(umidade) || isnan(temperatura)) {
+      Serial.println("Falha ao ler o sensor DHT22!");
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Erro no Sensor!");
+      return;
+    }
+
+    // Exibição dos dados no Monitor Serial
+    Serial.print("Temp: ");
+    Serial.print(temperatura, 1);
+    Serial.print(" *C | Umid: ");
+    Serial.print(umidade, 1);
+    Serial.println(" %");
+
+    // Atualização das informações no Display LCD
+    atualizarDisplay(temperatura, umidade);
+
+    // Lógica de verificação dos limites críticos
+    if (temperatura > MAX_TEMP || umidade > MAX_UMID) {
+      dispararAlarme();
+    } else {
+      desligarAlarme();
+    }
+  }
+}
+
+/**
+ * @brief Atualiza as informações de temperatura e umidade no LCD.
+ * @param temp Valor da temperatura em graus Celsius.
+ * @param umid Valor da umidade em porcentagem.
+ */
+void atualizarDisplay(float
